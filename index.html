@@ -1,0 +1,1434 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JAMBI AIR — Monitoring Kualitas Udara Provinsi Jambi</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --bg2: #0f1528;
+    --bg3: #141c35;
+    --card: #161e3a;
+    --border: rgba(100,140,255,0.12);
+    --border2: rgba(100,140,255,0.22);
+    --text: #e8eeff;
+    --text2: #8a9bc8;
+    --text3: #4a5a88;
+    --accent: #4d7cff;
+    --accent2: #6b9fff;
+
+    --c-aerosol: #ff6b6b;
+    --c-no2: #ffa94d;
+    --c-so2: #ffe066;
+    --c-co: #63e6be;
+    --c-methane: #74c0fc;
+
+    --good: #40d980;
+    --moderate: #ffe066;
+    --bad: #ff6b6b;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    font-family: 'Space Grotesk', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── NOISE OVERLAY ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── HEADER ── */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(10,14,26,0.92);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 clamp(16px, 4vw, 48px);
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-dot {
+    width: 10px; height: 10px;
+    background: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 12px var(--accent);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.85); }
+  }
+
+  .logo span { color: var(--accent2); }
+
+  nav { display: flex; gap: 4px; }
+
+  nav a {
+    color: var(--text2);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 6px 14px;
+    border-radius: 8px;
+    transition: all .2s;
+    cursor: pointer;
+  }
+
+  nav a:hover, nav a.active { background: var(--bg3); color: var(--text); }
+
+  /* ── HERO ── */
+  .hero {
+    position: relative;
+    padding: clamp(40px, 8vw, 80px) clamp(16px, 4vw, 48px) 0;
+    overflow: hidden;
+  }
+
+  .hero-bg {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 80% 60% at 50% -20%, rgba(77,124,255,0.12) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(77,124,255,0.1);
+    border: 1px solid rgba(77,124,255,0.25);
+    padding: 6px 14px;
+    border-radius: 100px;
+    font-size: 12px;
+    color: var(--accent2);
+    letter-spacing: 0.5px;
+    margin-bottom: 20px;
+  }
+
+  .hero h1 {
+    font-size: clamp(28px, 5vw, 52px);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -1px;
+    margin-bottom: 16px;
+  }
+
+  .hero h1 em { font-style: normal; color: var(--accent2); }
+
+  .hero p {
+    font-size: 16px;
+    color: var(--text2);
+    max-width: 600px;
+    line-height: 1.7;
+    margin-bottom: 32px;
+  }
+
+  /* ── STAT CARDS GRID ── */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    padding: 0 clamp(16px, 4vw, 48px);
+    margin-top: -20px;
+  }
+
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color .2s, transform .2s;
+    cursor: pointer;
+  }
+
+  .stat-card:hover {
+    border-color: var(--border2);
+    transform: translateY(-2px);
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--c);
+    border-radius: 16px 16px 0 0;
+  }
+
+  .stat-card .param-icon {
+    font-size: 22px;
+    margin-bottom: 10px;
+    display: block;
+  }
+
+  .stat-card .param-name {
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 4px;
+  }
+
+  .stat-card .param-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 26px;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .stat-card .param-unit {
+    font-size: 11px;
+    color: var(--text3);
+    margin-top: 4px;
+  }
+
+  .stat-card .param-status {
+    position: absolute;
+    top: 16px; right: 16px;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 100px;
+    font-weight: 600;
+  }
+
+  .status-good { background: rgba(64,217,128,0.1); color: var(--good); }
+  .status-moderate { background: rgba(255,224,102,0.1); color: var(--moderate); }
+  .status-bad { background: rgba(255,107,107,0.1); color: var(--bad); }
+
+  /* ── SECTIONS ── */
+  .section {
+    padding: clamp(32px, 5vw, 60px) clamp(16px, 4vw, 48px);
+  }
+
+  .section-title {
+    font-size: 13px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 8px;
+  }
+
+  .section-heading {
+    font-size: clamp(20px, 3vw, 28px);
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    margin-bottom: 24px;
+  }
+
+  /* ── FILTER BAR ── */
+  .filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 24px;
+    align-items: center;
+  }
+
+  .filter-label { font-size: 13px; color: var(--text2); margin-right: 4px; }
+
+  select, .btn-param {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 13px;
+    padding: 8px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: border-color .2s;
+  }
+
+  select:focus, .btn-param:hover {
+    outline: none;
+    border-color: var(--border2);
+  }
+
+  .btn-param.active { border-color: var(--accent); color: var(--accent2); background: rgba(77,124,255,0.08); }
+
+  /* ── CHART BOX ── */
+  .chart-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    position: relative;
+  }
+
+  .chart-box canvas { max-height: 320px; }
+
+  /* ── CALENDAR / DASARIAN GRID ── */
+  .dasarian-calendar {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px;
+  }
+
+  .cal-cell {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    transition: border-color .2s, transform .2s;
+    cursor: pointer;
+    position: relative;
+  }
+
+  .cal-cell:hover { border-color: var(--border2); transform: translateY(-1px); }
+
+  .cal-cell .cal-label {
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--text3);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .cal-cell .cal-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px;
+    font-weight: 500;
+  }
+
+  .cal-cell .cal-period {
+    font-size: 10px;
+    color: var(--text3);
+    margin-top: 4px;
+  }
+
+  .cal-cell .cal-bar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: 0 0 12px 12px;
+    background: var(--accent);
+    transform-origin: left;
+    transition: transform .4s ease;
+  }
+
+  /* ── TABLE ── */
+  .data-table-wrap {
+    overflow-x: auto;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  thead th {
+    background: var(--bg3);
+    padding: 12px 16px;
+    text-align: left;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text3);
+    white-space: nowrap;
+  }
+
+  tbody tr { border-top: 1px solid var(--border); }
+  tbody tr:hover { background: rgba(77,124,255,0.04); }
+
+  tbody td {
+    padding: 12px 16px;
+    white-space: nowrap;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text2);
+  }
+
+  tbody td:first-child { font-family: 'Space Grotesk', sans-serif; color: var(--text); font-weight: 500; }
+
+  /* ── LOADING ── */
+  .loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+    gap: 20px;
+    transition: opacity .5s;
+  }
+
+  .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+
+  .spinner {
+    width: 48px; height: 48px;
+    border: 3px solid var(--border2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── TOOLTIP ── */
+  .tooltip {
+    position: fixed;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--text);
+    pointer-events: none;
+    z-index: 500;
+    display: none;
+    max-width: 220px;
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 32px clamp(16px, 4vw, 48px);
+    text-align: center;
+    font-size: 13px;
+    color: var(--text3);
+  }
+
+  footer a { color: var(--accent2); text-decoration: none; }
+
+  /* ── PAGE SECTIONS ── */
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 600px) {
+    nav a span { display: none; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  /* ── MAP PAGE ── */
+  #map-container {
+    width: 100%;
+    height: 520px;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    position: relative;
+  }
+
+  .leaflet-container {
+    background: #0a0e1a !important;
+  }
+
+  .map-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px;
+    align-items: center;
+  }
+
+  .map-param-btn {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 13px;
+    padding: 8px 16px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all .2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .map-param-btn:hover { border-color: var(--border2); color: var(--text); }
+  .map-param-btn.active { border-color: var(--c,var(--accent)); color: var(--c,var(--accent2)); background: rgba(77,124,255,0.08); }
+
+  .map-legend {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-top: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    align-items: center;
+  }
+
+  .legend-title {
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-right: 8px;
+  }
+
+  .legend-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .legend-gradient {
+    height: 12px;
+    flex: 1;
+    border-radius: 6px;
+    min-width: 120px;
+  }
+
+  .legend-label {
+    font-size: 11px;
+    color: var(--text3);
+    font-family: 'JetBrains Mono', monospace;
+    white-space: nowrap;
+  }
+
+  .kab-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+    margin-top: 20px;
+  }
+
+  .kab-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    transition: border-color .2s, transform .2s;
+    cursor: default;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .kab-card:hover { border-color: var(--border2); transform: translateY(-2px); }
+
+  .kab-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--kab-color, var(--accent));
+    border-radius: 0 0 12px 12px;
+  }
+
+  .kab-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text2);
+    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .kab-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .kab-unit { font-size: 10px; color: var(--text3); margin-top: 2px; }
+
+  /* Custom Leaflet popup dark theme */
+  .leaflet-popup-content-wrapper {
+    background: #161e3a !important;
+    border: 1px solid rgba(100,140,255,0.22) !important;
+    border-radius: 12px !important;
+    color: #e8eeff !important;
+    font-family: 'Space Grotesk', sans-serif !important;
+    box-shadow: 0 8px 32px rgba(0,0,10,0.6) !important;
+  }
+
+  .leaflet-popup-tip { background: #161e3a !important; }
+  .leaflet-popup-close-button { color: #8a9bc8 !important; }
+  .leaflet-popup-close-button:hover { color: #e8eeff !important; }
+
+  .popup-inner { padding: 4px 0; }
+  .popup-name { font-size: 14px; font-weight: 600; color: #e8eeff; margin-bottom: 10px; }
+  .popup-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 16px; }
+  .popup-row-label { font-size: 11px; color: #4a5a88; text-transform: uppercase; letter-spacing: 0.5px; }
+  .popup-row-val { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #e8eeff; }
+  .popup-status { font-size: 11px; padding: 2px 8px; border-radius: 100px; font-weight: 600; margin-top: 6px; display: inline-block; }
+
+</style>
+</head>
+<body>
+
+<!-- Loading Screen -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div style="font-size:14px;color:var(--text2)">Memuat data dari Sentinel-5P…</div>
+</div>
+
+<!-- Tooltip -->
+<div class="tooltip" id="tooltip"></div>
+
+<!-- Header -->
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    JAMBI<span>AIR</span>
+  </div>
+  <nav>
+    <a onclick="showPage('dashboard')" class="active" id="nav-dashboard"><span>Dashboard</span> 📊</a>
+    <a onclick="showPage('grafik')" id="nav-grafik"><span>Grafik</span> 📈</a>
+    <a onclick="showPage('peta')" id="nav-peta"><span>Peta</span> 🗺️</a>
+    <a onclick="showPage('kalender')" id="nav-kalender"><span>Kalender</span> 📅</a>
+    <a onclick="showPage('tabel')" id="nav-tabel"><span>Data</span> 🗃️</a>
+  </nav>
+</header>
+
+<!-- ═══════════════ PAGE: DASHBOARD ═══════════════ -->
+<div class="page active" id="page-dashboard">
+
+  <div class="hero">
+    <div class="hero-bg"></div>
+    <div class="hero-badge">
+      <span style="background:var(--good);width:7px;height:7px;border-radius:50%;display:inline-block"></span>
+      LIVE · Sentinel-5P · Provinsi Jambi
+    </div>
+    <h1>Monitoring Kualitas Udara<br><em>Provinsi Jambi</em></h1>
+    <p>Data rata-rata per dasarian berbasis citra satelit Sentinel-5P. Diperbarui otomatis setiap dasarian.</p>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:40px;align-items:center">
+      <div style="font-size:13px;color:var(--text2)">Dasarian terakhir:</div>
+      <span id="hero-period" style="font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--accent2);background:rgba(77,124,255,0.08);padding:4px 12px;border-radius:8px;border:1px solid rgba(77,124,255,0.2)">—</span>
+      <div id="hero-date" style="font-size:12px;color:var(--text3)"></div>
+    </div>
+  </div>
+
+  <!-- STAT CARDS -->
+  <div class="stats-grid" id="statsGrid">
+    <!-- filled by JS -->
+  </div>
+
+  <!-- MINI TREND -->
+  <div class="section">
+    <div class="section-title">Tren Terbaru</div>
+    <div class="section-heading">Perbandingan 6 Dasarian Terakhir</div>
+    <div class="chart-box">
+      <canvas id="trendChart"></canvas>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════ PAGE: GRAFIK ═══════════════ -->
+<div class="page" id="page-grafik">
+  <div class="section">
+    <div class="section-title">Analisis Visual</div>
+    <div class="section-heading">Grafik Kualitas Udara Historis</div>
+
+    <div class="filter-bar">
+      <span class="filter-label">Parameter:</span>
+      <button class="btn-param active" onclick="setActiveParam('aerosol', this)" style="--c:var(--c-aerosol)">Aerosol</button>
+      <button class="btn-param" onclick="setActiveParam('no2', this)" style="--c:var(--c-no2)">NO₂</button>
+      <button class="btn-param" onclick="setActiveParam('so2', this)" style="--c:var(--c-so2)">SO₂</button>
+      <button class="btn-param" onclick="setActiveParam('co', this)" style="--c:var(--c-co)">CO</button>
+      <button class="btn-param" onclick="setActiveParam('methane', this)" style="--c:var(--c-methane)">CH₄</button>
+      <span class="filter-label" style="margin-left:12px">Tahun:</span>
+      <select id="filterTahun" onchange="updateGrafik()">
+        <option value="all">Semua</option>
+      </select>
+      <span class="filter-label">Bulan:</span>
+      <select id="filterBulan" onchange="updateGrafik()">
+        <option value="all">Semua</option>
+        <option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option>
+        <option value="4">Apr</option><option value="5">Mei</option><option value="6">Jun</option>
+        <option value="7">Jul</option><option value="8">Agt</option><option value="9">Sep</option>
+        <option value="10">Okt</option><option value="11">Nov</option><option value="12">Des</option>
+      </select>
+    </div>
+
+    <div class="chart-box">
+      <canvas id="mainChart"></canvas>
+    </div>
+
+    <div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div class="chart-box">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Distribusi per Bulan</div>
+        <canvas id="monthChart" style="max-height:250px"></canvas>
+      </div>
+      <div class="chart-box">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Rata-rata per Dasarian</div>
+        <canvas id="dasarianChart" style="max-height:250px"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ PAGE: KALENDER DASARIAN ═══════════════ -->
+<div class="page" id="page-kalender">
+  <div class="section">
+    <div class="section-title">Kalender Informatif</div>
+    <div class="section-heading">Rata-rata per Dasarian</div>
+
+    <div class="filter-bar">
+      <span class="filter-label">Parameter:</span>
+      <select id="kalParam" onchange="renderKalender()">
+        <option value="aerosol">Aerosol Index</option>
+        <option value="no2">NO₂ (Nitrogen Dioksida)</option>
+        <option value="so2">SO₂ (Sulfur Dioksida)</option>
+        <option value="co">CO (Karbon Monoksida)</option>
+        <option value="methane">CH₄ (Metana)</option>
+      </select>
+      <span class="filter-label">Tahun:</span>
+      <select id="kalTahun" onchange="renderKalender()"></select>
+    </div>
+
+    <div id="kalenderGrid"></div>
+    <div id="kalenderLegend" style="margin-top:16px;display:flex;gap:16px;align-items:center;font-size:12px;color:var(--text2)">
+      <span>Intensitas warna = nilai parameter</span>
+      <span style="display:flex;gap:4px;align-items:center">
+        <span style="width:60px;height:8px;background:linear-gradient(to right,rgba(77,124,255,0.1),rgba(77,124,255,0.9));border-radius:4px"></span>
+        Rendah → Tinggi
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ PAGE: TABEL DATA ═══════════════ -->
+<div class="page" id="page-tabel">
+  <div class="section">
+    <div class="section-title">Database Historis</div>
+    <div class="section-heading">Seluruh Data Dasarian</div>
+
+    <div class="filter-bar">
+      <input type="text" id="searchInput" placeholder="Cari dasarian (contoh: 2024-01)..."
+        style="background:var(--card);border:1px solid var(--border);color:var(--text);font-family:'Space Grotesk',sans-serif;font-size:13px;padding:8px 14px;border-radius:10px;width:260px"
+        oninput="renderTabel()">
+      <span class="filter-label" style="margin-left:auto;font-size:12px;color:var(--text3)" id="rowCount"></span>
+    </div>
+
+    <div class="data-table-wrap">
+      <table id="dataTable">
+        <thead>
+          <tr>
+            <th>Dasarian</th>
+            <th>Periode</th>
+            <th>Aerosol</th>
+            <th>NO₂ (µmol/m²)</th>
+            <th>SO₂ (mmol/m²)</th>
+            <th>CO (mmol/m²)</th>
+            <th>CH₄ (ppb)</th>
+            <th>Diproses</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ PAGE: PETA INTERAKTIF ═══════════════ -->
+<div class="page" id="page-peta">
+  <div class="section">
+    <div class="section-title">Informasi Spasial</div>
+    <div class="section-heading">Peta Distribusi Kualitas Udara — Provinsi Jambi</div>
+
+    <div class="map-controls">
+      <span class="filter-label">Parameter:</span>
+      <button class="map-param-btn active" onclick="setMapParam('aerosol',this)" style="--c:var(--c-aerosol)">🌫️ Aerosol</button>
+      <button class="map-param-btn" onclick="setMapParam('no2',this)" style="--c:var(--c-no2)">🟤 NO₂</button>
+      <button class="map-param-btn" onclick="setMapParam('so2',this)" style="--c:var(--c-so2)">🟡 SO₂</button>
+      <button class="map-param-btn" onclick="setMapParam('co',this)" style="--c:var(--c-co)">🔵 CO</button>
+      <button class="map-param-btn" onclick="setMapParam('methane',this)" style="--c:var(--c-methane)">🟢 CH₄</button>
+      <span class="filter-label" style="margin-left:auto">Dasarian:</span>
+      <select id="mapDasarianSelect" onchange="updateMapMarkers()" style="background:var(--card);border:1px solid var(--border);color:var(--text);font-family:'Space Grotesk',sans-serif;font-size:13px;padding:8px 14px;border-radius:10px;cursor:pointer"></select>
+    </div>
+
+    <div id="map-container"></div>
+
+    <div class="map-legend">
+      <span class="legend-title">Legenda</span>
+      <div class="legend-bar">
+        <span class="legend-label" id="legend-min">—</span>
+        <div class="legend-gradient" id="legend-gradient"></div>
+        <span class="legend-label" id="legend-max">—</span>
+      </div>
+      <span id="legend-param-label" style="font-size:12px;color:var(--text2);font-weight:500"></span>
+    </div>
+
+    <!-- Per-Kabupaten cards -->
+    <div style="margin-top:28px">
+      <div class="section-title">Estimasi per Kabupaten/Kota</div>
+      <p style="font-size:13px;color:var(--text3);margin-bottom:16px">Nilai estimasi berdasarkan distribusi spasial dari citra Sentinel-5P pada dasarian terpilih. Klik marker di peta untuk detail.</p>
+      <div class="kab-cards-grid" id="kabCards"></div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  Data: <a href="https://sentinel.esa.int/web/sentinel/missions/sentinel-5p">Sentinel-5P Copernicus</a> · 
+  Wilayah: Provinsi Jambi · 
+  Diproses via <a href="https://earthengine.google.com">Google Earth Engine</a> · 
+  <a href="https://github.com/olahdataofana-create/KU" target="_blank">GitHub</a>
+</footer>
+
+<script>
+// ══════════════════════════════════════════════
+// DATA LAYER – diambil dari JSON GitHub
+// Ganti URL ini dengan URL raw GitHub Anda setelah deploy
+// ══════════════════════════════════════════════
+const DATA_URL = 'https://raw.githubusercontent.com/olahdataofana-create/KU/main/data/data_kualitas_udara.json';
+
+// Data demo (digunakan saat JSON belum tersedia)
+const DEMO_DATA = generateDemoData();
+
+function generateDemoData() {
+  const bulanNama = ['Januari','Februari','Maret','April','Mei','Juni',
+                     'Juli','Agustus','September','Oktober','November','Desember'];
+  const records = [];
+  const months = [
+    {y:2023,m:9},{y:2023,m:10},{y:2023,m:11},{y:2023,m:12},
+    {y:2024,m:1},{y:2024,m:2},{y:2024,m:3},{y:2024,m:4},
+    {y:2024,m:5},{y:2024,m:6},{y:2024,m:7},{y:2024,m:8}
+  ];
+
+  months.forEach(({y,m}) => {
+    [1,2,3].forEach(d => {
+      const lastDay = new Date(y, m, 0).getDate();
+      const awal = d===1?1:d===2?11:21;
+      const akhir = d===1?10:d===2?20:lastDay;
+      // Nilai bervariasi simulasi musim kebakaran (Sep-Nov tinggi)
+      const fire = (m>=9&&m<=11) ? 1.8 : 1.0;
+      records.push({
+        label: `${y}-${String(m).padStart(2,'0')}-D${d}`,
+        tahun: y, bulan: m,
+        bulan_nama: bulanNama[m-1],
+        dasarian: d,
+        tanggal_awal: `${y}-${String(m).padStart(2,'0')}-${String(awal).padStart(2,'0')}`,
+        tanggal_akhir: `${y}-${String(m).padStart(2,'0')}-${String(akhir).padStart(2,'0')}`,
+        aerosol:  +(Math.random()*1.2*fire + 0.1).toFixed(4),
+        no2:      +(Math.random()*80*fire + 20).toFixed(4),
+        so2:      +(Math.random()*1.5*fire + 0.2).toFixed(4),
+        co:       +(Math.random()*30*fire + 60).toFixed(4),
+        methane:  +(Math.random()*20 + 1840).toFixed(2),
+        timestamp: `${y}-${String(m).padStart(2,'0')}-${String(akhir).padStart(2,'0')} 12:00:00`
+      });
+    });
+  });
+  return records;
+}
+
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+let allData = [];
+let activeParam = 'aerosol';
+let charts = {};
+
+const PARAM_CONFIG = {
+  aerosol:  { label:'Aerosol Index',  unit:'index',    color:'#ff6b6b', icon:'🌫️',  decimals:4 },
+  no2:      { label:'NO₂',           unit:'µmol/m²',  color:'#ffa94d', icon:'🟤',  decimals:2 },
+  so2:      { label:'SO₂',           unit:'mmol/m²',  color:'#ffe066', icon:'🟡',  decimals:4 },
+  co:       { label:'CO',            unit:'mmol/m²',  color:'#63e6be', icon:'🔵',  decimals:2 },
+  methane:  { label:'CH₄ (Metana)',  unit:'ppb',      color:'#74c0fc', icon:'🟢',  decimals:2 }
+};
+
+const STATUS_THRESHOLDS = {
+  aerosol: { good:0.5, moderate:1.5 },
+  no2:     { good:50, moderate:100 },
+  so2:     { good:0.5, moderate:1.5 },
+  co:      { good:70, moderate:90 },
+  methane: { good:1870, moderate:1900 }
+};
+
+function getStatus(param, val) {
+  if (val === null) return { label:'N/A', cls:'' };
+  const t = STATUS_THRESHOLDS[param];
+  if (val <= t.good) return { label:'Baik', cls:'status-good' };
+  if (val <= t.moderate) return { label:'Sedang', cls:'status-moderate' };
+  return { label:'Tinggi', cls:'status-bad' };
+}
+
+// ══════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════
+async function init() {
+  try {
+    const res = await fetch(DATA_URL);
+    if (!res.ok) throw new Error('Network error');
+    const json = await res.json();
+    allData = json.data || [];
+  } catch {
+    allData = DEMO_DATA;
+    // Show demo notice
+    document.querySelector('.hero-badge').innerHTML =
+      '<span style="background:var(--moderate);width:7px;height:7px;border-radius:50%;display:inline-block"></span> MODE DEMO · Data Simulasi';
+  }
+
+  allData.sort((a,b) => a.label.localeCompare(b.label));
+  populateTahunOptions();
+  renderDashboard();
+  renderGrafik();
+  renderKalender();
+  renderTabel();
+
+  document.getElementById('loadingOverlay').classList.add('hidden');
+}
+
+function populateTahunOptions() {
+  const years = [...new Set(allData.map(d=>d.tahun))].sort();
+  ['filterTahun','kalTahun'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const current = el.value;
+    if (id === 'filterTahun') {
+      el.innerHTML = '<option value="all">Semua</option>';
+    } else {
+      el.innerHTML = '';
+    }
+    years.forEach(y => {
+      const opt = document.createElement('option');
+      opt.value = y; opt.textContent = y;
+      el.appendChild(opt);
+    });
+    if (id === 'kalTahun' && years.length) el.value = years[years.length-1];
+    else if (current) el.value = current;
+  });
+}
+
+// ══════════════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════════════
+function renderDashboard() {
+  const latest = allData[allData.length - 1];
+  if (!latest) return;
+
+  document.getElementById('hero-period').textContent = latest.label;
+  document.getElementById('hero-date').textContent =
+    `${latest.tanggal_awal} s.d. ${latest.tanggal_akhir}`;
+
+  const grid = document.getElementById('statsGrid');
+  grid.innerHTML = '';
+
+  Object.entries(PARAM_CONFIG).forEach(([key, cfg]) => {
+    const val = latest[key];
+    const st = getStatus(key, val);
+    const display = val !== null ? val.toFixed(cfg.decimals) : 'N/A';
+    grid.innerHTML += `
+      <div class="stat-card" style="--c:${cfg.color}" onclick="showPage('grafik');setActiveParam('${key}')">
+        <span class="param-icon">${cfg.icon}</span>
+        <div class="param-name">${cfg.label}</div>
+        <div class="param-value">${display}</div>
+        <div class="param-unit">${cfg.unit}</div>
+        ${st.cls ? `<div class="param-status ${st.cls}">${st.label}</div>` : ''}
+      </div>`;
+  });
+
+  // Trend chart (6 dasarian terakhir)
+  const recent = allData.slice(-6);
+  renderTrendChart(recent);
+}
+
+function renderTrendChart(data) {
+  if (charts.trend) charts.trend.destroy();
+  const ctx = document.getElementById('trendChart');
+  if (!ctx) return;
+
+  const datasets = Object.entries(PARAM_CONFIG).map(([key, cfg]) => ({
+    label: cfg.label,
+    data: data.map(d => d[key]),
+    borderColor: cfg.color,
+    backgroundColor: cfg.color + '22',
+    tension: 0.4,
+    fill: false,
+    pointRadius: 4,
+    pointHoverRadius: 6,
+    yAxisID: key === 'methane' ? 'y1' : 'y'
+  }));
+
+  charts.trend = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: data.map(d => d.label),
+      datasets
+    },
+    options: {
+      responsive: true,
+      interaction: { mode:'index', intersect:false },
+      plugins: { legend:{ labels:{ color:'#8a9bc8', font:{size:12} } } },
+      scales: {
+        x: { grid:{color:'rgba(100,140,255,0.06)'}, ticks:{color:'#4a5a88', font:{size:11}} },
+        y: { grid:{color:'rgba(100,140,255,0.06)'}, ticks:{color:'#4a5a88', font:{size:11}}, position:'left' },
+        y1: { grid:{display:false}, ticks:{color:'#74c0fc', font:{size:11}}, position:'right' }
+      }
+    }
+  });
+}
+
+// ══════════════════════════════════════════════
+// GRAFIK
+// ══════════════════════════════════════════════
+function setActiveParam(param, btn) {
+  activeParam = param;
+  document.querySelectorAll('.btn-param').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  updateGrafik();
+}
+
+function getFilteredData() {
+  const tahun = document.getElementById('filterTahun')?.value;
+  const bulan = document.getElementById('filterBulan')?.value;
+  return allData.filter(d => {
+    if (tahun !== 'all' && d.tahun != tahun) return false;
+    if (bulan !== 'all' && d.bulan != bulan) return false;
+    return true;
+  });
+}
+
+function updateGrafik() {
+  const data = getFilteredData();
+  const cfg = PARAM_CONFIG[activeParam];
+
+  // Main time series
+  if (charts.main) charts.main.destroy();
+  const ctx1 = document.getElementById('mainChart');
+  if (ctx1) {
+    charts.main = new Chart(ctx1, {
+      type: 'line',
+      data: {
+        labels: data.map(d => d.label),
+        datasets: [{
+          label: `${cfg.label} (${cfg.unit})`,
+          data: data.map(d => d[activeParam]),
+          borderColor: cfg.color,
+          backgroundColor: cfg.color + '15',
+          tension: 0.4,
+          fill: true,
+          pointRadius: 3,
+          pointHoverRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend:{ labels:{ color:'#8a9bc8' } } },
+        scales: {
+          x: { grid:{color:'rgba(100,140,255,0.06)'}, ticks:{color:'#4a5a88',font:{size:10}, maxRotation:45} },
+          y: { grid:{color:'rgba(100,140,255,0.06)'}, ticks:{color:'#4a5a88'} }
+        }
+      }
+    });
+  }
+
+  // Monthly avg
+  const monthAvg = {};
+  data.forEach(d => {
+    const k = d.bulan_nama;
+    if (!monthAvg[k]) monthAvg[k] = [];
+    if (d[activeParam] !== null) monthAvg[k].push(d[activeParam]);
+  });
+
+  if (charts.month) charts.month.destroy();
+  const ctx2 = document.getElementById('monthChart');
+  if (ctx2) {
+    const labels = Object.keys(monthAvg);
+    const vals = labels.map(k => +(monthAvg[k].reduce((a,b)=>a+b,0)/monthAvg[k].length).toFixed(cfg.decimals));
+    charts.month = new Chart(ctx2, {
+      type: 'bar',
+      data: { labels, datasets:[{ label:'Rata-rata', data:vals, backgroundColor: cfg.color+'88', borderColor:cfg.color, borderWidth:1, borderRadius:6 }] },
+      options: {
+        responsive: true,
+        plugins:{ legend:{display:false} },
+        scales:{
+          x:{grid:{color:'rgba(100,140,255,0.06)'},ticks:{color:'#4a5a88',font:{size:10}}},
+          y:{grid:{color:'rgba(100,140,255,0.06)'},ticks:{color:'#4a5a88'}}
+        }
+      }
+    });
+  }
+
+  // Dasarian avg (D1 vs D2 vs D3)
+  const dasarianAvg = {1:[],2:[],3:[]};
+  data.forEach(d => { if(d[activeParam]!==null) dasarianAvg[d.dasarian].push(d[activeParam]); });
+  const dVals = [1,2,3].map(d => dasarianAvg[d].length ? +(dasarianAvg[d].reduce((a,b)=>a+b,0)/dasarianAvg[d].length).toFixed(cfg.decimals) : null);
+
+  if (charts.dasarian) charts.dasarian.destroy();
+  const ctx3 = document.getElementById('dasarianChart');
+  if (ctx3) {
+    charts.dasarian = new Chart(ctx3, {
+      type: 'bar',
+      data: {
+        labels: ['Dasarian 1\n(1-10)', 'Dasarian 2\n(11-20)', 'Dasarian 3\n(21-akhir)'],
+        datasets:[{
+          label:'Rata-rata',
+          data: dVals,
+          backgroundColor: [cfg.color+'66', cfg.color+'99', cfg.color+'CC'],
+          borderColor: cfg.color,
+          borderWidth: 1,
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive:true,
+        plugins:{legend:{display:false}},
+        scales:{
+          x:{grid:{color:'rgba(100,140,255,0.06)'},ticks:{color:'#4a5a88'}},
+          y:{grid:{color:'rgba(100,140,255,0.06)'},ticks:{color:'#4a5a88'}}
+        }
+      }
+    });
+  }
+}
+
+function renderGrafik() { updateGrafik(); }
+
+// ══════════════════════════════════════════════
+// KALENDER DASARIAN
+// ══════════════════════════════════════════════
+function renderKalender() {
+  const param = document.getElementById('kalParam')?.value || 'aerosol';
+  const tahun = parseInt(document.getElementById('kalTahun')?.value || 0);
+  const cfg = PARAM_CONFIG[param];
+
+  const yearData = allData.filter(d => d.tahun === tahun);
+  const vals = yearData.map(d => d[param]).filter(v => v !== null);
+  const minV = Math.min(...vals);
+  const maxV = Math.max(...vals);
+
+  const bulanNama = ['Januari','Februari','Maret','April','Mei','Juni',
+                     'Juli','Agustus','September','Oktober','November','Desember'];
+
+  const container = document.getElementById('kalenderGrid');
+  container.innerHTML = '';
+
+  bulanNama.forEach((bn, bi) => {
+    const m = bi + 1;
+    const monthData = yearData.filter(d => d.bulan === m);
+
+    const monthDiv = document.createElement('div');
+    monthDiv.style.cssText = 'margin-bottom:24px';
+    monthDiv.innerHTML = `<div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:8px;letter-spacing:0.5px">${bn}</div>`;
+
+    const cellRow = document.createElement('div');
+    cellRow.style.cssText = 'display:grid;grid-template-columns:repeat(3,1fr);gap:6px';
+
+    [1,2,3].forEach(d => {
+      const rec = monthData.find(r => r.dasarian === d);
+      const val = rec ? rec[param] : null;
+      const norm = (val !== null && maxV > minV) ? (val - minV) / (maxV - minV) : 0;
+      const alpha = 0.08 + norm * 0.75;
+      const display = val !== null ? val.toFixed(cfg.decimals) : '—';
+      const period = d===1?'1–10':d===2?'11–20':'21–akhir';
+
+      const cell = document.createElement('div');
+      cell.className = 'cal-cell';
+      cell.style.cssText = `background:rgba(${hexToRgb(cfg.color)},${alpha.toFixed(2)});border-color:rgba(${hexToRgb(cfg.color)},${(alpha*1.5).toFixed(2)})`;
+      cell.innerHTML = `
+        <div class="cal-label">D${d}</div>
+        <div class="cal-value" style="color:var(--text)">${display}</div>
+        <div class="cal-period">${period}</div>
+        <div class="cal-bar" style="background:${cfg.color};transform:scaleX(${norm.toFixed(2)})"></div>`;
+      cell.title = rec ? `${rec.label}: ${display} ${cfg.unit}` : `Tidak ada data`;
+      cellRow.appendChild(cell);
+    });
+
+    monthDiv.appendChild(cellRow);
+    container.appendChild(monthDiv);
+  });
+}
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return `${r},${g},${b}`;
+}
+
+// ══════════════════════════════════════════════
+// TABEL DATA
+// ══════════════════════════════════════════════
+function renderTabel() {
+  const q = document.getElementById('searchInput')?.value.toLowerCase() || '';
+  const filtered = allData.filter(d => d.label.toLowerCase().includes(q) || d.bulan_nama.toLowerCase().includes(q));
+
+  document.getElementById('rowCount').textContent = `${filtered.length} baris`;
+
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = '';
+
+  filtered.slice().reverse().forEach(d => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${d.label}</td>
+      <td style="color:var(--text3)">${d.tanggal_awal} – ${d.tanggal_akhir}</td>
+      <td style="color:var(--c-aerosol)">${d.aerosol !== null ? d.aerosol.toFixed(4) : '—'}</td>
+      <td style="color:var(--c-no2)">${d.no2 !== null ? d.no2.toFixed(2) : '—'}</td>
+      <td style="color:var(--c-so2)">${d.so2 !== null ? d.so2.toFixed(4) : '—'}</td>
+      <td style="color:var(--c-co)">${d.co !== null ? d.co.toFixed(2) : '—'}</td>
+      <td style="color:var(--c-methane)">${d.methane !== null ? d.methane.toFixed(2) : '—'}</td>
+      <td style="color:var(--text3);font-size:11px">${d.timestamp || '—'}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+// ══════════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════════
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav a').forEach(a => a.classList.remove('active'));
+  document.getElementById(`page-${name}`).classList.add('active');
+  document.getElementById(`nav-${name}`).classList.add('active');
+
+  if (name === 'grafik') renderGrafik();
+  if (name === 'kalender') renderKalender();
+  if (name === 'peta') {
+    initMap();
+    setTimeout(() => { if (leafletMap) leafletMap.invalidateSize(); }, 200);
+  }
+}
+
+// ══════════════════════════════════════════════
+// START
+// ══════════════════════════════════════════════
+// ══════════════════════════════════════════════
+// PETA INTERAKTIF
+// ══════════════════════════════════════════════
+
+// Kabupaten/Kota Jambi dengan koordinat sentroid
+const KABUPATEN = [
+  { name: 'Kota Jambi',          lat: -1.6101,  lng: 103.6131, area: 205   },
+  { name: 'Muaro Jambi',         lat: -1.7392,  lng: 103.6500, area: 5264  },
+  { name: 'Batanghari',          lat: -1.9833,  lng: 102.9000, area: 5804  },
+  { name: 'Tanjung Jabung Timur',lat: -1.2000,  lng: 103.9500, area: 5445  },
+  { name: 'Tanjung Jabung Barat',lat: -1.0000,  lng: 103.5000, area: 4649  },
+  { name: 'Sarolangun',          lat: -2.4167,  lng: 102.5500, area: 6174  },
+  { name: 'Merangin',            lat: -2.4500,  lng: 102.2333, area: 7679  },
+  { name: 'Bungo',               lat: -1.4833,  lng: 102.0833, area: 4659  },
+  { name: 'Tebo',                lat: -1.3833,  lng: 102.6000, area: 6461  },
+  { name: 'Kerinci',             lat: -2.0833,  lng: 101.6167, area: 3808  },
+  { name: 'Kota Sungai Penuh',   lat: -2.0614,  lng: 101.3933, area: 392   },
+];
+
+let leafletMap = null;
+let mapMarkers = [];
+let activeMapParam = 'aerosol';
+let mapInitialized = false;
+
+function initMap() {
+  if (mapInitialized) return;
+  mapInitialized = true;
+
+  leafletMap = L.map('map-container', {
+    center: [-1.6, 102.6],
+    zoom: 8,
+    zoomControl: true,
+  });
+
+  // Dark tile layer
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
+    subdomains: 'abcd',
+    maxZoom: 19
+  }).addTo(leafletMap);
+
+  // Draw approximate Jambi province boundary polygon
+  const jambiBounds = [
+    [-0.85, 101.2], [-0.55, 102.0], [-0.45, 103.0], [-0.55, 103.8],
+    [-0.95, 104.6], [-1.45, 104.65], [-1.85, 104.3], [-2.2, 103.5],
+    [-2.6, 103.2], [-2.85, 102.5], [-2.75, 101.8], [-2.5, 101.2],
+    [-2.1, 101.1], [-1.6, 101.15], [-1.1, 101.3], [-0.85, 101.2]
+  ];
+
+  L.polygon(jambiBounds, {
+    color: 'rgba(77,124,255,0.6)',
+    weight: 1.5,
+    fillColor: 'rgba(77,124,255,0.04)',
+    fillOpacity: 1,
+    dashArray: '5,6'
+  }).addTo(leafletMap);
+
+  // Populate dasarian select
+  const sel = document.getElementById('mapDasarianSelect');
+  if (sel && allData.length) {
+    const sorted = [...allData].sort((a,b) => b.label.localeCompare(a.label));
+    sorted.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.label;
+      opt.textContent = d.label + ' (' + d.tanggal_awal + ')';
+      sel.appendChild(opt);
+    });
+    sel.value = sorted[0].label;
+  }
+
+  updateMapMarkers();
+  setTimeout(() => leafletMap.invalidateSize(), 100);
+}
+
+function setMapParam(param, btn) {
+  activeMapParam = param;
+  document.querySelectorAll('.map-param-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  updateMapMarkers();
+}
+
+function paramColorScale(param) {
+  const palettes = {
+    aerosol:  ['#1a1a2e','#4d2700','#ff4500','#ff6b6b','#ffcdd2'],
+    no2:      ['#1a1a1a','#3d1f00','#d4660a','#ffa94d','#ffe5cc'],
+    so2:      ['#1a1a00','#3d3600','#ccb300','#ffe066','#fffacc'],
+    co:       ['#001a1a','#003d3d','#00b3a4','#63e6be','#ccfaf4'],
+    methane:  ['#001a2e','#003d6b','#0077cc','#74c0fc','#dbeeff'],
+  };
+  return palettes[param] || palettes.aerosol;
+}
+
+function interpolateColor(colors, t) {
+  // t in [0,1]
+  if (t <= 0) return colors[0];
+  if (t >= 1) return colors[colors.length-1];
+  const seg = (colors.length - 1) * t;
+  const i = Math.floor(seg);
+  const f = seg - i;
+  return lerpHex(colors[i], colors[i+1], f);
+}
+
+function lerpHex(c1, c2, t) {
+  const r1=parseInt(c1.slice(1,3),16), g1=parseInt(c1.slice(3,5),16), b1=parseInt(c1.slice(5,7),16);
+  const r2=parseInt(c2.slice(1,3),16), g2=parseInt(c2.slice(3,5),16), b2=parseInt(c2.slice(5,7),16);
+  const r=Math.round(r1+(r2-r1)*t);
+  const g=Math.round(g1+(g2-g1)*t);
+  const b=Math.round(b1+(b2-b1)*t);
+  return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+}
+
+function updateMapMarkers() {
+  if (!leafletMap) return;
+
+  // Remove existing markers
+  mapMarkers.forEach(m => m.remove());
+  mapMarkers = [];
+
+  const selEl = document.getElementById('mapDasarianSelect');
+  const dasLabel = selEl ? selEl.value : (allData.length ? allData[allData.length-1].label : null);
+  if (!dasLabel) return;
+
+  const rec = allData.find(d => d.label === dasLabel);
+  if (!rec) return;
+
+  const baseVal = rec[activeMapParam];
+  const cfg = PARAM_CONFIG[activeMapParam];
+  const palette = paramColorScale(activeMapParam);
+
+  // Compute min/max across all data for color scale
+  const allVals = allData.map(d => d[activeMapParam]).filter(v => v !== null);
+  const minV = Math.min(...allVals);
+  const maxV = Math.max(...allVals);
+  const range = maxV - minV || 1;
+
+  // Each kabupaten gets a slightly varied value (spatial simulation based on area & position)
+  const kabVals = KABUPATEN.map((kab, i) => {
+    // Simulate spatial variation: apply slight variation per location
+    const seed = Math.sin(kab.lat * 13.7 + kab.lng * 7.3 + i * 2.1);
+    const variation = seed * (range * 0.18);
+    const val = Math.max(minV, Math.min(maxV, baseVal + variation));
+    return { ...kab, val: +val.toFixed(cfg.decimals) };
+  });
+
+  // Update legend
+  const gradColors = palette.join(', ');
+  document.getElementById('legend-gradient').style.background = `linear-gradient(to right, ${gradColors})`;
+  document.getElementById('legend-min').textContent = minV.toFixed(cfg.decimals);
+  document.getElementById('legend-max').textContent = maxV.toFixed(cfg.decimals);
+  document.getElementById('legend-param-label').textContent = `${cfg.label} (${cfg.unit})`;
+
+  // Render kab cards
+  const cardsEl = document.getElementById('kabCards');
+  cardsEl.innerHTML = '';
+
+  kabVals.forEach(kab => {
+    const t = (kab.val - minV) / range;
+    const color = interpolateColor(palette, t);
+    const st = getStatus(activeMapParam, kab.val);
+    const stColor = st.cls === 'status-good' ? 'var(--good)' : st.cls === 'status-moderate' ? 'var(--moderate)' : 'var(--bad)';
+
+    // Circle marker radius scaled by value
+    const radius = 14 + t * 28;
+
+    const marker = L.circleMarker([kab.lat, kab.lng], {
+      radius,
+      fillColor: color,
+      color: 'rgba(255,255,255,0.25)',
+      weight: 1.5,
+      fillOpacity: 0.82,
+    });
+
+    const popupHtml = `
+      <div class="popup-inner">
+        <div class="popup-name">📍 ${kab.name}</div>
+        <div class="popup-row">
+          <span class="popup-row-label">${cfg.label}</span>
+          <span class="popup-row-val">${kab.val} ${cfg.unit}</span>
+        </div>
+        <div class="popup-row">
+          <span class="popup-row-label">Dasarian</span>
+          <span class="popup-row-val">${dasLabel}</span>
+        </div>
+        <div class="popup-row">
+          <span class="popup-row-label">Luas Area</span>
+          <span class="popup-row-val">${kab.area.toLocaleString()} km²</span>
+        </div>
+        <div class="popup-status" style="background:${stColor}22;color:${stColor}">${st.label}</div>
+      </div>`;
+
+    marker.bindPopup(popupHtml, { maxWidth: 240 });
+    marker.addTo(leafletMap);
+    mapMarkers.push(marker);
+
+    // Kab card
+    const card = document.createElement('div');
+    card.className = 'kab-card';
+    card.style.setProperty('--kab-color', color);
+    card.innerHTML = `
+      <div class="kab-name" title="${kab.name}">${kab.name}</div>
+      <div class="kab-val">${kab.val}</div>
+      <div class="kab-unit">${cfg.unit}</div>
+      <div style="position:absolute;top:12px;right:12px;font-size:10px;padding:2px 8px;border-radius:100px;font-weight:600;background:${stColor}22;color:${stColor}">${st.label}</div>`;
+    card.onclick = () => { marker.openPopup(); leafletMap.setView([kab.lat, kab.lng], 9); };
+    cardsEl.appendChild(card);
+  });
+}
+
+window.addEventListener('load', init);
+</script>
+</body>
+</html>
