@@ -1,0 +1,52 @@
+{
+  "metadata": {
+    "last_update": "2026-05-16 07:54:22",
+    "total_records": 1,
+    "wilayah": "Provinsi Jambi",
+    "sumber": "Sentinel-5P (Copernicus)",
+    "parameters": {
+      "Aerosol": {
+        "nama": "Aerosol Index",
+        "unit": "index",
+        "band": "absorbing_aerosol_index"
+      },
+      "NO2": {
+        "nama": "Nitrogen Dioksida",
+        "unit": "µmol/m²",
+        "band": "tropospheric_NO2_column_number_density"
+      },
+      "SO2": {
+        "nama": "Sulfur Dioksida",
+        "unit": "mmol/m²",
+        "band": "SO2_column_number_density"
+      },
+      "CO": {
+        "nama": "Karbon Monoksida",
+        "unit": "mmol/m²",
+        "band": "CO_column_number_density"
+      },
+      "Methane": {
+        "nama": "Metana",
+        "unit": "ppb",
+        "band": "CH4_column_volume_mixing_ratio_dry_air"
+      }
+    }
+  },
+  "data": [
+    {
+      "label": "2024-01-D1",
+      "tahun": 2024,
+      "bulan": 1,
+      "bulan_nama": "January",
+      "dasarian": 1,
+      "tanggal_awal": "2024-01-01",
+      "tanggal_akhir": "2024-01-10",
+      "aerosol": -1.024489,
+      "no2": null,
+      "so2": null,
+      "co": null,
+      "methane": null,
+      "timestamp": "2026-05-16 07:54:12"
+    }
+  ]
+}
