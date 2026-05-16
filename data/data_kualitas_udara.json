@@ -1,7 +1,7 @@
 {
   "metadata": {
-    "last_update": "2026-05-16 11:34:13",
-    "total_records": 34,
+    "last_update": "2026-05-16 11:35:33",
+    "total_records": 35,
     "wilayah": "Provinsi Jambi",
     "sumber": "Sentinel-5P (Copernicus)",
     "parameters": {
@@ -527,6 +527,21 @@
       "co": 28.167843,
       "methane": null,
       "timestamp": "2026-05-16 11:33:56"
+    },
+    {
+      "label": "2024-12-D1",
+      "tahun": 2024,
+      "bulan": 12,
+      "bulan_nama": "December",
+      "dasarian": 1,
+      "tanggal_awal": "2024-12-01",
+      "tanggal_akhir": "2024-12-10",
+      "aerosol": -0.747978,
+      "no2": 34.681438,
+      "so2": 0.002552,
+      "co": 28.913374,
+      "methane": null,
+      "timestamp": "2026-05-16 11:35:17"
     },
     {
       "label": "2025-01-D1",
